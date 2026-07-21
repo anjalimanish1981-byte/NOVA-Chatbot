@@ -1,5 +1,5 @@
 import streamlit as st
-from duckduckgo_search import DDGS
+from googlesearch import search
 from groq import Groq
 
 # 1. Page Configuration
@@ -13,13 +13,13 @@ GROQ_API_KEY = st.secrets.get("GROQ_API_KEY")
 client = Groq(api_key=GROQ_API_KEY)
 
 
-# 3. Reliable Web Search Function using duckduckgo-search package
+# 3. Web Search Function using googlesearch-python
 def live_web_search(query):
   try:
     results = []
-    with DDGS() as ddgs:
-      for r in ddgs.text(query, max_results=3):
-        results.append(f"- {r.get('title')}: {r.get('body')}")
+    # Search for top 3 live Google results without needing an API key
+    for url in search(query, num_results=3, lang="en"):
+      results.append(f"- {url}")
     return "\n".join(results)
   except Exception as e:
     return ""
@@ -47,8 +47,8 @@ if prompt := st.chat_input("Ask NOVA anything..."):
   # Build System Prompt with Live Context
   system_prompt = (
       "You are NOVA, a helpful AI assistant. "
-      "Use the provided web search context to answer accurately if relevant.\n\n"
-      f"Web Search Context:\n{search_context}"
+      "Answer accurately using real-time information. "
+      f"Search Query Context:\n{search_context}"
   )
 
   messages_payload = [{"role": "system", "content": system_prompt}] + [
