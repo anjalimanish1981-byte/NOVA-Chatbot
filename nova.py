@@ -1,25 +1,31 @@
 import streamlit as st
-from googlesearch import search
 from groq import Groq
+from tavily import TavilyClient
 
 # 1. Page Configuration
 st.set_page_config(page_title="NOVA AI", page_icon="🤖")
 st.title("NOVA AI Companion")
 
-# 2. Retrieve Groq API Key from Streamlit Secrets
+# 2. Retrieve API Keys from Streamlit Secrets
 GROQ_API_KEY = st.secrets.get("GROQ_API_KEY")
+TAVILY_API_KEY = st.secrets.get("TAVILY_API_KEY")
 
-# Initialize Groq Client
-client = Groq(api_key=GROQ_API_KEY)
+# Initialize Clients
+groq_client = Groq(api_key=GROQ_API_KEY)
+tavily_client = (
+    TavilyClient(api_key=TAVILY_API_KEY) if TAVILY_API_KEY else None
+)
 
 
-# 3. Web Search Function using googlesearch-python
+# 3. Live Web Search via Tavily API
 def live_web_search(query):
+  if not tavily_client:
+    return ""
   try:
+    response = tavily_client.search(query=query, max_results=3)
     results = []
-    # Search for top 3 live Google results without needing an API key
-    for url in search(query, num_results=3, lang="en"):
-      results.append(f"- {url}")
+    for r in response.get("results", []):
+      results.append(f"- {r.get('title')}: {r.get('content')}")
     return "\n".join(results)
   except Exception as e:
     return ""
@@ -46,9 +52,9 @@ if prompt := st.chat_input("Ask NOVA anything..."):
 
   # Build System Prompt with Live Context
   system_prompt = (
-      "You are NOVA, a helpful AI assistant. "
-      "Answer accurately using real-time information. "
-      f"Search Query Context:\n{search_context}"
+      "You are NOVA, a helpful AI assistant with access to real-time search context.\n"
+      "Use the provided Web Search Context below to answer the user's question accurately.\n\n"
+      f"Web Search Context:\n{search_context}"
   )
 
   messages_payload = [{"role": "system", "content": system_prompt}] + [
@@ -58,7 +64,7 @@ if prompt := st.chat_input("Ask NOVA anything..."):
 
   # Generate Response from Groq
   with st.chat_message("assistant"):
-    response = client.chat.completions.create(
+    response = groq_client.chat.completions.create(
         model="llama-3.3-70b-versatile", messages=messages_payload
     )
     reply = response.choices[0].message.content
