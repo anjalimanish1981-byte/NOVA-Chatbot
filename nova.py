@@ -1,7 +1,5 @@
-import os
-import requests
 import streamlit as st
-from bs4 import BeautifulSoup
+from duckduckgo_search import DDGS
 from groq import Groq
 
 # 1. Page Configuration
@@ -15,24 +13,15 @@ GROQ_API_KEY = st.secrets.get("GROQ_API_KEY")
 client = Groq(api_key=GROQ_API_KEY)
 
 
-# 3. Free Web Search Function (DuckDuckGo API)
+# 3. Reliable Web Search Function using duckduckgo-search package
 def live_web_search(query):
   try:
-    url = "https://html.duckduckgo.com/html/"
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        )
-    }
-    response = requests.post(url, data={"q": query}, headers=headers, timeout=5)
-
-    soup = BeautifulSoup(response.text, "html.parser")
     results = []
-    for snippet in soup.find_all("a", class_="result__snippet")[:3]:
-      results.append(f"- {snippet.get_text().strip()}")
-
+    with DDGS() as ddgs:
+      for r in ddgs.text(query, max_results=3):
+        results.append(f"- {r.get('title')}: {r.get('body')}")
     return "\n".join(results)
-  except Exception:
+  except Exception as e:
     return ""
 
 
