@@ -1,49 +1,77 @@
+import os
+import requests
 import streamlit as st
 from groq import Groq
 
+# 1. Page Configuration
 st.set_page_config(page_title="NOVA AI", page_icon="🤖")
 st.title("NOVA AI Companion")
 
-# Fetch API key securely from Streamlit Secrets
-api_key = st.secrets.get("GROQ_API_KEY")
+# 2. Retrieve Secrets from Streamlit Secrets
+GROQ_API_KEY = st.secrets.get("GROQ_API_KEY")
+GOOGLE_API_KEY = st.secrets.get("GOOGLE_API_KEY")
+GOOGLE_CSE_ID = st.secrets.get("GOOGLE_CSE_ID")
 
-if not api_key:
-    st.error("Missing Groq API Key! Please set GROQ_API_KEY in Streamlit secrets.")
-    st.stop()
+# Initialize Groq Client
+client = Groq(api_key=GROQ_API_KEY)
 
-client = Groq(api_key=api_key)
 
-# Initialize chat history
+# 3. Google Custom Search Function
+def google_search(query):
+  if not GOOGLE_API_KEY or not GOOGLE_CSE_ID:
+    return ""
+  url = "https://www.googleapis.com/customsearch/v1"
+  params = {"q": query, "key": GOOGLE_API_KEY, "cx": GOOGLE_CSE_ID, "num": 3}
+  try:
+    response = requests.get(url, params=params)
+    data = response.json()
+    results = data.get("items", [])
+    search_summary = "\n".join(
+        [f"- {item.get('title')}: {item.get('snippet')}" for item in results]
+    )
+    return search_summary
+  except Exception:
+    return ""
+
+
+# 4. Session State for Chat History
 if "messages" not in st.session_state:
-    st.session_state.messages = []
+  st.session_state.messages = []
 
-# Display chat history
+# Display Existing Chat Messages
 for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+  with st.chat_message(message["role"]):
+    st.markdown(message["content"])
 
-# Process user input
+# 5. Handle User Input
 if prompt := st.chat_input("Ask NOVA anything..."):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
+  # Append & Display User Message
+  st.session_state.messages.append({"role": "user", "content": prompt})
+  with st.chat_message("user"):
+    st.markdown(prompt)
 
-    with st.chat_message("assistant"):
-        response_placeholder = st.empty()
-        full_response = ""
-        
-        # Use Groq's fast Llama 3 model
-        completion = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
-            messages=[{"role": m["role"], "content": m["content"]} for m in st.session_state.messages],
-            stream=True,
-        )
-        
-        for chunk in completion:
-            content = chunk.choices[0].delta.content or ""
-            full_response += content
-            response_placeholder.markdown(full_response + "▌")
-            
-        response_placeholder.markdown(full_response)
-        
-    st.session_state.messages.append({"role": "assistant", "content": full_response})
+  # Perform Google Search for context
+  search_context = google_search(prompt)
+
+  # Build System Prompt with Live Search Context
+  system_prompt = (
+      "You are NOVA, a helpful AI assistant. "
+      "Use the provided web search context to answer accurately if relevant.\n\n"
+      f"Web Search Context:\n{search_context}"
+  )
+
+  messages_payload = [{"role": "system", "content": system_prompt}] + [
+      {"role": m["role"], "content": m["content"]}
+      for m in st.session_state.messages
+  ]
+
+  # Generate Response from Groq
+  with st.chat_message("assistant"):
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile", messages=messages_payload
+    )
+    reply = response.choices[0].message.content
+    st.markdown(reply)
+
+  # Append Assistant Response to Chat
+  st.session_state.messages.append({"role": "assistant", "content": reply})
