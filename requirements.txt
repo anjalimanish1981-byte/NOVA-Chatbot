@@ -2,3 +2,5 @@ streamlit
 supabase
 requests
 streamlit-mic-recorder
+tavily-python
+groq
