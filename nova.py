@@ -2,20 +2,23 @@ import urllib.parse
 import streamlit as st
 from supabase import create_client
 from streamlit_mic_recorder import speech_to_text
-from duckduckgo_search import DDGS
 from tavily import TavilyClient
+from groq import Groq
 
 # Page Config
 st.set_page_config(page_title="NOVA AI Generator", page_icon="🤖", layout="centered")
 
 # Initialize Supabase client
-supabase_url = st.secrets["SUPABASE_URL"]
-supabase_key = st.secrets["SUPABASE_KEY"]
+supabase_url = st.secrets.get("SUPABASE_URL", "")
+supabase_key = st.secrets.get("SUPABASE_KEY", "")
 supabase = create_client(supabase_url, supabase_key)
 
-# Initialize Tavily Client
+# Initialize Tavily & Groq Clients from Streamlit Secrets
 tavily_key = st.secrets.get("TAVILY_API_KEY", None)
 tavily_client = TavilyClient(api_key=tavily_key) if tavily_key else None
+
+groq_key = st.secrets.get("GROQ_API_KEY", None)
+groq_client = Groq(api_key=groq_key) if groq_key else None
 
 st.title("🤖 NOVA AI Generator")
 
@@ -52,7 +55,7 @@ if "user" not in st.session_state:
                 st.error("Invalid or expired code. Please try again.")
 
 # ---------------------------------------------------------
-# 2. LOGGED-IN CHAT, VOICE, IMAGE & TAVILY SEARCH GENERATOR
+# 2. LOGGED-IN CHAT, VOICE, IMAGE & GROQ/TAVILY AI
 # ---------------------------------------------------------
 else:
     st.write(f"Logged in as: **{st.session_state.user.email}**")
@@ -85,6 +88,7 @@ else:
         st.chat_message("user").write(user_prompt)
         st.session_state.messages.append({"role": "user", "content": user_prompt})
 
+        # Image generation keywords check
         image_keywords = ["image", "generate", "picture", "draw", "photo", "create an image", "logo"]
         is_image_request = any(word in user_prompt.lower() for word in image_keywords)
 
@@ -99,13 +103,16 @@ else:
         else:
             with st.chat_message("assistant"):
                 bot_response = ""
-                
-                # Attempt Tavily Search first for real-time information
-                if tavily_client:
+
+                # Check if prompt requires a web search
+                search_keywords = ["latest", "news", "today", "search", "who is", "weather", "score", "rate"]
+                needs_search = any(word in user_prompt.lower() for word in search_keywords)
+
+                # 1. Search with Tavily if search keywords detected
+                if needs_search and tavily_client:
                     try:
                         search_res = tavily_client.search(query=user_prompt, max_results=3)
                         results = search_res.get("results", [])
-                        
                         if results:
                             bot_response = "🌐 **Live Web Search Results:**\n\n"
                             for r in results:
@@ -113,13 +120,22 @@ else:
                     except Exception:
                         bot_response = ""
 
-                # Fallback to AI Chat if Tavily returns no results
-                if not bot_response:
+                # 2. Process query with Groq LLM (LLaMA 3.3)
+                if not bot_response and groq_client:
                     try:
-                        with DDGS() as ddgs:
-                            bot_response = ddgs.chat(user_prompt, model="gpt-4o-mini")
-                    except Exception:
-                        bot_response = f"I am NOVA AI! How else can I help you with '{user_prompt}'?"
+                        chat_completion = groq_client.chat.completions.create(
+                            messages=[
+                                {"role": "system", "content": "You are NOVA AI, a smart and friendly personal assistant."},
+                                {"role": "user", "content": user_prompt}
+                            ],
+                            model="llama-3.3-70b-versatile",
+                        )
+                        bot_response = chat_completion.choices[0].message.content
+                    except Exception as e:
+                        bot_response = f"🤖 I am NOVA AI! How can I assist you with: '{user_prompt}'?"
+
+                if not bot_response:
+                    bot_response = f"🤖 Hello! I am NOVA AI. How can I help you today?"
 
                 st.write(bot_response)
                 st.session_state.messages.append({"role": "assistant", "content": bot_response})
