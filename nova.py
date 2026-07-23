@@ -34,7 +34,23 @@ if "user" not in st.session_state:
                 st.rerun()
             except Exception as e:
                 st.error("Invalid or expired code. Please try again.")
-
 else:
-    st.write(f"Logged in as: {st.session_state.user.email}")
-    st.write("Welcome! Type your prompt below to create text or images.")
+    # Header & User Info
+    st.write(f"Logged in as: **{st.session_state.user.email}**")
+    st.caption("Welcome! Type your prompt below to create text or generate images.")
+    
+    # Input field for user prompt
+    user_prompt = st.chat_input("Ask NOVA AI or describe an image to generate...")
+    
+    if user_prompt:
+        st.chat_message("user").write(user_prompt)
+        
+        # Simple detector for image requests
+        if any(word in user_prompt.lower() for word in ["image", "generate", "picture", "draw", "photo"]):
+            with st.chat_message("assistant"):
+                st.write(f"🎨 Generating image for: *'{user_prompt}'*...")
+                # Add your image generation API call here (e.g. Pollinations, Together AI, Replicate, etc.)
+        else:
+            with st.chat_message("assistant"):
+                st.write(f"🤖 Here is your answer for: *'{user_prompt}'*")
+                # Add your LLM text response logic here
