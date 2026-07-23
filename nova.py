@@ -13,7 +13,7 @@ supabase_url = st.secrets.get("SUPABASE_URL", "")
 supabase_key = st.secrets.get("SUPABASE_KEY", "")
 supabase = create_client(supabase_url, supabase_key)
 
-# Initialize Tavily & Groq Clients from Streamlit Secrets
+# Initialize Tavily & Groq Clients
 tavily_key = st.secrets.get("TAVILY_API_KEY", None)
 tavily_client = TavilyClient(api_key=tavily_key) if tavily_key else None
 
