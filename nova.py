@@ -1,16 +1,21 @@
 import urllib.parse
-import requests
 import streamlit as st
 from supabase import create_client
 from streamlit_mic_recorder import speech_to_text
+from duckduckgo_search import DDGS
+from tavily import TavilyClient
 
 # Page Config
 st.set_page_config(page_title="NOVA AI Generator", page_icon="🤖", layout="centered")
 
-# Initialize Supabase client using Streamlit Secrets
+# Initialize Supabase client
 supabase_url = st.secrets["SUPABASE_URL"]
 supabase_key = st.secrets["SUPABASE_KEY"]
 supabase = create_client(supabase_url, supabase_key)
+
+# Initialize Tavily Client
+tavily_key = st.secrets.get("TAVILY_API_KEY", None)
+tavily_client = TavilyClient(api_key=tavily_key) if tavily_key else None
 
 st.title("🤖 NOVA AI Generator")
 
@@ -34,7 +39,6 @@ if "user" not in st.session_state:
             else:
                 st.warning("Please enter a valid email address.")
 
-    # 6-Digit OTP Input
     otp_code = st.text_input("Enter the 6-digit code received in email:", type="password")
 
     if st.button("Verify & Sign In 🚀", use_container_width=True):
@@ -48,14 +52,12 @@ if "user" not in st.session_state:
                 st.error("Invalid or expired code. Please try again.")
 
 # ---------------------------------------------------------
-# 2. LOGGED-IN CHAT, VOICE & IMAGE GENERATOR
+# 2. LOGGED-IN CHAT, VOICE, IMAGE & TAVILY SEARCH GENERATOR
 # ---------------------------------------------------------
 else:
-    # Header & Logged-in info
     st.write(f"Logged in as: **{st.session_state.user.email}**")
-    st.caption("Welcome! Ask anything or request an image (e.g., 'draw a futuristic city').")
+    st.caption("Welcome! Ask anything, request an image, or search the web.")
 
-    # Maintain conversation memory
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
@@ -67,9 +69,7 @@ else:
             else:
                 st.write(message["content"])
 
-    # ---------------------------------------------------------
-    # VOICE INPUT BUTTON
-    # ---------------------------------------------------------
+    # Voice Input
     st.write("🎙️ **Voice Assistant:** Click below to speak your prompt")
     spoken_text = speech_to_text(
         language='en',
@@ -78,26 +78,19 @@ else:
         key='speech_input'
     )
 
-    # Chat Text Input Box
     typed_prompt = st.chat_input("Ask NOVA AI or describe an image to generate...")
-
-    # Determine active prompt (either spoken or typed)
     user_prompt = spoken_text if spoken_text else typed_prompt
 
     if user_prompt:
-        # Display user input
         st.chat_message("user").write(user_prompt)
         st.session_state.messages.append({"role": "user", "content": user_prompt})
 
-        # Simple detector for image requests
         image_keywords = ["image", "generate", "picture", "draw", "photo", "create an image", "logo"]
         is_image_request = any(word in user_prompt.lower() for word in image_keywords)
 
         if is_image_request:
             with st.chat_message("assistant"):
                 st.write(f"🎨 Generating image for: *'{user_prompt}'*...")
-                
-                # Instant free image generation via Pollinations AI
                 encoded_prompt = urllib.parse.quote(user_prompt)
                 image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=800&height=800&nologo=true"
 
@@ -105,23 +98,28 @@ else:
                 st.session_state.messages.append({"role": "assistant", "content": image_url, "type": "image"})
         else:
             with st.chat_message("assistant"):
-                # FREE POST TEXT GENERATION (Avoids 402 Error)
-                try:
-                    payload = {
-                        "messages": [
-                            {"role": "system", "content": "You are NOVA AI, a helpful and friendly assistant."},
-                            {"role": "user", "content": user_prompt}
-                        ],
-                        "model": "openai"
-                    }
-                    response = requests.post("https://text.pollinations.ai/", json=payload, timeout=15)
-                    
-                    if response.status_code == 200:
-                        bot_response = response.text
-                    else:
-                        bot_response = f"🤖 I am NOVA AI! How can I help you today?"
+                bot_response = ""
+                
+                # Attempt Tavily Search first for real-time information
+                if tavily_client:
+                    try:
+                        search_res = tavily_client.search(query=user_prompt, max_results=3)
+                        results = search_res.get("results", [])
+                        
+                        if results:
+                            bot_response = "🌐 **Live Web Search Results:**\n\n"
+                            for r in results:
+                                bot_response += f"• **[{r['title']}]({r['url']})**\n{r['content']}\n\n"
+                    except Exception:
+                        bot_response = ""
 
-                    st.write(bot_response)
-                    st.session_state.messages.append({"role": "assistant", "content": bot_response})
-                except Exception:
-                    st.write("🤖 Sorry, I couldn't process that request right now. Please try asking again!")
+                # Fallback to AI Chat if Tavily returns no results
+                if not bot_response:
+                    try:
+                        with DDGS() as ddgs:
+                            bot_response = ddgs.chat(user_prompt, model="gpt-4o-mini")
+                    except Exception:
+                        bot_response = f"I am NOVA AI! How else can I help you with '{user_prompt}'?"
+
+                st.write(bot_response)
+                st.session_state.messages.append({"role": "assistant", "content": bot_response})
