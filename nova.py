@@ -8,17 +8,16 @@ from groq import Groq
 # Page Config
 st.set_page_config(page_title="NOVA AI Generator", page_icon="🤖", layout="centered")
 
-# Initialize Supabase client
-supabase_url = st.secrets.get("SUPABASE_URL", "")
-supabase_key = st.secrets.get("SUPABASE_KEY", "")
-supabase = create_client(supabase_url, supabase_key)
+# Hardcoded Keys (Bypassing Streamlit Secrets Box)
+SUPABASE_URL = "https://wecsfbazfodlypiybymb.supabase.co"
+SUPABASE_KEY = "sb_publishable_gVeF5AWQnSWRQJuWMzBLWiAju"
+TAVILY_API_KEY = "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"
+GROQ_API_KEY = "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"
 
-# Initialize Tavily & Groq Clients
-tavily_key = st.secrets.get("TAVILY_API_KEY", None)
-tavily_client = TavilyClient(api_key=tavily_key) if tavily_key else None
-
-groq_key = st.secrets.get("GROQ_API_KEY", None)
-groq_client = Groq(api_key=groq_key) if groq_key else None
+# Initialize Clients
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+tavily_client = TavilyClient(api_key=TAVILY_API_KEY)
+groq_client = Groq(api_key=GROQ_API_KEY)
 
 st.title("🤖 NOVA AI Generator")
 
