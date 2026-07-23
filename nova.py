@@ -7,19 +7,70 @@ from tavily import TavilyClient
 # 1. Page Configuration
 st.set_page_config(page_title="NOVA AI", page_icon="🤖", layout="centered")
 
-# --- SIDEBAR THEME CUSTOMIZER ---
-st.sidebar.title("🎨 Customizer")
-st.sidebar.markdown("Customize NOVA's appearance live:")
+# --- SESSION STATE FOR MULTIPLE CHATS & HISTORY ---
+if "chats" not in st.session_state:
+  # Structure: {chat_id: {"title": "Chat Title", "messages": [...]}}
+  st.session_state.chats = {
+      "chat_1": {
+          "title": "Welcome Chat",
+          "messages": [{
+              "role": "assistant",
+              "content": (
+                  "Hello! 👋 I'm NOVA. You can ask me questions, upload images,"
+                  " or speak using the mic!"
+              ),
+          }],
+      }
+  }
 
-# Interactive Color Pickers with defaults
+if "active_chat_id" not in st.session_state:
+  st.session_state.active_chat_id = "chat_1"
+
+
+# Function to create a new chat
+def create_new_chat():
+  new_id = f"chat_{len(st.session_state.chats) + 1}"
+  st.session_state.chats[new_id] = {
+      "title": f"New Chat {len(st.session_state.chats) + 1}",
+      "messages": [{
+          "role": "assistant",
+          "content": "Hello! 👋 How can I help you in this new conversation?",
+      }],
+  }
+  st.session_state.active_chat_id = new_id
+
+
+# --- SIDEBAR: RECENT CHATS & THEME CUSTOMIZER ---
+st.sidebar.button(
+    "➕ New Chat", on_click=create_new_chat, use_container_width=True
+)
+
+st.sidebar.markdown("### 🕒 Recent Chats")
+for chat_id, chat_data in list(st.session_state.chats.items())[::-1]:
+  # Highlight the active chat button
+  btn_type = (
+      "primary" if chat_id == st.session_state.active_chat_id else "secondary"
+  )
+  if st.sidebar.button(
+      chat_data["title"],
+      key=chat_id,
+      use_container_width=True,
+      type=btn_type,
+  ):
+    st.session_state.active_chat_id = chat_id
+    st.rerun()
+
+st.sidebar.markdown("---")
+st.sidebar.title("🎨 Customizer")
+
+# Interactive Color Pickers
 header_color = st.sidebar.color_picker("Header Color", "#1A73E8")
 card_bg_color = st.sidebar.color_picker("Card Background", "#F0F4F9")
 accent_border = st.sidebar.color_picker("Accent Border", "#E0A96D")
 text_color = st.sidebar.color_picker("Card Text Color", "#1F1F1F")
 
-# Quick Preset Shortcuts
+# Quick Presets
 st.sidebar.markdown("---")
-st.sidebar.subheader("Quick Presets")
 preset = st.sidebar.radio(
     "Choose Preset:",
     ["Custom", "Dark Blue & Gold", "Classic Light", "Dark Mode"],
@@ -41,7 +92,7 @@ elif preset == "Dark Mode":
   accent_border = "#4D94FF"
   text_color = "#F0F0F0"
 
-# Inject Dynamic CSS based on user selections
+# Inject Dynamic CSS
 st.markdown(
     f"""
     <style>
@@ -107,24 +158,16 @@ def live_web_search(query):
     return ""
 
 
-# 5. Session State Initializations
-if "messages" not in st.session_state:
-  st.session_state.messages = [
-      {
-          "role": "assistant",
-          "content": (
-              "Hello! 👋 I'm NOVA. You can ask me questions, upload images,"
-              " or speak using the mic!"
-          ),
-      }
-  ]
+# Get Active Messages
+current_chat = st.session_state.chats[st.session_state.active_chat_id]
+active_messages = current_chat["messages"]
 
-# Display Existing Chat History
-for message in st.session_state.messages:
+# Display Existing Messages for Active Chat
+for message in active_messages:
   with st.chat_message(message["role"]):
     st.markdown(message["content"])
 
-# 6. Integrated Action Bar
+# 5. Controls Top Bar
 st.write("")
 col_attach, col_model, col_voice = st.columns([1, 2, 1])
 
@@ -156,15 +199,19 @@ with col_voice:
       key="voice_input",
   )
 
-# 7. Text Input Bar
+# 6. Text Input Bar
 typed_prompt = st.chat_input("Ask NOVA anything...")
 
-# Process Input
+# Determine Input Source
 prompt = spoken_text if spoken_text else typed_prompt
 
 if prompt or uploaded_file:
   active_model = selected_model
   search_context = live_web_search(prompt) if prompt else ""
+
+  # Update Title if it's the first question in a new chat
+  if len(active_messages) <= 1 and prompt:
+    current_chat["title"] = prompt[:25] + ("..." if len(prompt) > 25 else "")
 
   sys_msg = (
       "You are NOVA, a helpful AI assistant. Answer accurately.\nWeb Search"
@@ -196,8 +243,8 @@ if prompt or uploaded_file:
     user_content = prompt
     display_text = prompt
 
-  # Display User Message
-  st.session_state.messages.append({"role": "user", "content": display_text})
+  # Append and Display User Message
+  active_messages.append({"role": "user", "content": display_text})
   with st.chat_message("user"):
     if uploaded_file:
       st.image(uploaded_file, width=250)
@@ -206,7 +253,7 @@ if prompt or uploaded_file:
 
   # Build API Payload
   api_messages = [{"role": "system", "content": sys_msg}]
-  for m in st.session_state.messages[:-1]:
+  for m in active_messages[:-1]:
     api_messages.append({"role": m["role"], "content": m["content"]})
   api_messages.append({"role": "user", "content": user_content})
 
@@ -219,8 +266,6 @@ if prompt or uploaded_file:
         )
         reply = response.choices[0].message.content
         st.markdown(reply)
-        st.session_state.messages.append(
-            {"role": "assistant", "content": reply}
-        )
+        active_messages.append({"role": "assistant", "content": reply})
       except Exception as e:
         st.error(f"Error generating response: {e}")
