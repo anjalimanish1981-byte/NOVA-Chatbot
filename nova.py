@@ -4,9 +4,10 @@ from groq import Groq
 from streamlit_mic_recorder import speech_to_text
 from tavily import TavilyClient
 
-# 1. Page Configuration & CSS
+# 1. Page Configuration
 st.set_page_config(page_title="NOVA AI", page_icon="🤖", layout="centered")
 
+# Custom CSS to tightly group controls above chat_input
 st.markdown(
     """
     <style>
@@ -14,13 +15,20 @@ st.markdown(
             background-color: #f0f4f9;
             padding: 20px;
             border-radius: 16px;
-            margin-bottom: 25px;
+            margin-bottom: 20px;
             border-left: 5px solid #1a73e8;
             font-family: sans-serif;
         }
         .welcome-card h2 {
             color: #1a73e8;
             margin-top: 0;
+        }
+        /* Tight bottom bar styling */
+        .block-container {
+            padding-bottom: 5rem;
+        }
+        div[data-testid="stFileUploader"] {
+            margin-top: -10px;
         }
     </style>
 """,
@@ -50,12 +58,11 @@ tavily_client = (
 )
 
 
-# 4. Helper: Base64 Encoding
+# 4. Helper Functions
 def encode_image(file):
   return base64.b64encode(file.getvalue()).decode("utf-8")
 
 
-# 5. Helper: Web Search
 def live_web_search(query):
   if not tavily_client or not query:
     return ""
@@ -69,7 +76,7 @@ def live_web_search(query):
     return ""
 
 
-# 6. Session State Initializations
+# 5. Session State Initializations
 if "messages" not in st.session_state:
   st.session_state.messages = [
       {
@@ -86,15 +93,16 @@ for message in st.session_state.messages:
   with st.chat_message(message["role"]):
     st.markdown(message["content"])
 
-# 7. Controls Top Bar
-st.write("---")
-col_attach, col_model, col_voice = st.columns([2, 3, 2])
+# 6. Integrated Bottom Action Bar
+st.write("")  # Spacing
+col_attach, col_model, col_voice = st.columns([1, 2, 1])
 
 with col_attach:
   uploaded_file = st.file_uploader(
-      "Attach Image",
+      "➕ Image",
       type=["png", "jpg", "jpeg", "webp"],
       label_visibility="collapsed",
+      key="file_attach",
   )
 
 with col_model:
@@ -117,17 +125,16 @@ with col_voice:
       key="voice_input",
   )
 
-# 8. Bottom Chat Input
+# 7. Text Input Bar directly underneath controls
 typed_prompt = st.chat_input("Ask NOVA anything...")
 
-# Determine Input Source
+# Process Input
 prompt = spoken_text if spoken_text else typed_prompt
 
 if prompt or uploaded_file:
   active_model = selected_model
   search_context = live_web_search(prompt) if prompt else ""
 
-  # System Message
   sys_msg = (
       "You are NOVA, a helpful AI assistant. Answer accurately.\nWeb Search"
       f" Context:\n{search_context}"
@@ -135,7 +142,6 @@ if prompt or uploaded_file:
 
   # Format user content
   if uploaded_file is not None:
-    # Use Groq's multimodal Qwen vision model for image processing
     active_model = "qwen/qwen3.6-27b"
     base64_img = encode_image(uploaded_file)
     mime_type = uploaded_file.type
@@ -159,7 +165,7 @@ if prompt or uploaded_file:
     user_content = prompt
     display_text = prompt
 
-  # Append and Display User Message
+  # Display User Message
   st.session_state.messages.append({"role": "user", "content": display_text})
   with st.chat_message("user"):
     if uploaded_file:
@@ -167,17 +173,13 @@ if prompt or uploaded_file:
     if prompt:
       st.markdown(prompt)
 
-  # Build Clean API Payload
+  # Build API Payload
   api_messages = [{"role": "system", "content": sys_msg}]
-
-  # Add prior history as plain text strings
   for m in st.session_state.messages[:-1]:
     api_messages.append({"role": m["role"], "content": m["content"]})
-
-  # Add current query payload
   api_messages.append({"role": "user", "content": user_content})
 
-  # Call Groq API
+  # Call API
   with st.chat_message("assistant"):
     with st.spinner("NOVA is analyzing..."):
       try:
@@ -186,8 +188,6 @@ if prompt or uploaded_file:
         )
         reply = response.choices[0].message.content
         st.markdown(reply)
-
-        # Save Assistant Reply
         st.session_state.messages.append(
             {"role": "assistant", "content": reply}
         )
