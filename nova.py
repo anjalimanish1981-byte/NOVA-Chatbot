@@ -4,7 +4,7 @@ from groq import Groq
 from streamlit_mic_recorder import speech_to_text
 from tavily import TavilyClient
 
-# 1. Page Configuration & Custom CSS Styling
+# 1. Page Configuration & CSS
 st.set_page_config(page_title="NOVA AI", page_icon="🤖", layout="centered")
 
 st.markdown(
@@ -40,23 +40,22 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# 3. Retrieve API Keys from Streamlit Secrets
+# 3. Retrieve Secrets & Initialize Clients
 GROQ_API_KEY = st.secrets.get("GROQ_API_KEY")
 TAVILY_API_KEY = st.secrets.get("TAVILY_API_KEY")
 
-# Initialize Clients
 groq_client = Groq(api_key=GROQ_API_KEY)
 tavily_client = (
     TavilyClient(api_key=TAVILY_API_KEY) if TAVILY_API_KEY else None
 )
 
 
-# 4. Helper Function: Encode Image to Base64
+# 4. Helper: Base64 Encoding
 def encode_image(file):
   return base64.b64encode(file.getvalue()).decode("utf-8")
 
 
-# 5. Live Web Search Function
+# 5. Helper: Web Search
 def live_web_search(query):
   if not tavily_client or not query:
     return ""
@@ -82,12 +81,12 @@ if "messages" not in st.session_state:
       }
   ]
 
-# Display Chat History
+# Display Existing Chat History
 for message in st.session_state.messages:
   with st.chat_message(message["role"]):
     st.markdown(message["content"])
 
-# 7. Action Controls Top Bar
+# 7. Controls Top Bar
 st.write("---")
 col_attach, col_model, col_voice = st.columns([2, 3, 2])
 
@@ -103,8 +102,8 @@ with col_model:
       "Model",
       [
           "llama-3.3-70b-versatile",
-          "llama-3.2-11b-vision-preview",
-          "llama3-8b-8192",
+          "llama-3.1-8b-instant",
+          "qwen/qwen3.6-27b",
       ],
       label_visibility="collapsed",
   )
@@ -121,63 +120,76 @@ with col_voice:
 # 8. Bottom Chat Input
 typed_prompt = st.chat_input("Ask NOVA anything...")
 
-# Determine Prompt
+# Determine Input Source
 prompt = spoken_text if spoken_text else typed_prompt
 
 if prompt or uploaded_file:
-  user_content = []
-
-  # Text Prompt
-  if prompt:
-    user_content.append({"type": "text", "text": prompt})
-  else:
-    user_content.append({"type": "text", "text": "What is in this image?"})
-
-  # Handle Image Processing
-  base64_image = None
   active_model = selected_model
+  search_context = live_web_search(prompt) if prompt else ""
 
+  # System Message
+  sys_msg = (
+      "You are NOVA, a helpful AI assistant. Answer accurately.\nWeb Search"
+      f" Context:\n{search_context}"
+  )
+
+  # Format user content
   if uploaded_file is not None:
-    base64_image = encode_image(uploaded_file)
+    # Use Groq's multimodal Qwen vision model for image processing
+    active_model = "qwen/qwen3.6-27b"
+    base64_img = encode_image(uploaded_file)
     mime_type = uploaded_file.type
-    user_content.append({
-        "type": "image_url",
-        "image_url": {"url": f"data:{mime_type};base64,{base64_image}"},
-    })
-    # Auto-switch to vision model if an image is uploaded
-    active_model = "llama-3.2-11b-vision-preview"
 
-  # Display User Message
-  st.session_state.messages.append({"role": "user", "content": prompt or "🖼️ [Uploaded Image]"})
+    user_content = [
+        {
+            "type": "text",
+            "text": prompt if prompt else "What is in this image?",
+        },
+        {
+            "type": "image_url",
+            "image_url": {"url": f"data:{mime_type};base64,{base64_img}"},
+        },
+    ]
+    display_text = (
+        prompt
+        if prompt
+        else f"🖼️ *Uploaded Image ({uploaded_file.name}) for analysis*"
+    )
+  else:
+    user_content = prompt
+    display_text = prompt
+
+  # Append and Display User Message
+  st.session_state.messages.append({"role": "user", "content": display_text})
   with st.chat_message("user"):
     if uploaded_file:
       st.image(uploaded_file, width=250)
     if prompt:
       st.markdown(prompt)
 
-  # Perform Search (if text prompt given)
-  search_context = live_web_search(prompt) if prompt else ""
+  # Build Clean API Payload
+  api_messages = [{"role": "system", "content": sys_msg}]
 
-  # System Prompt
-  system_prompt = (
-      "You are NOVA, a helpful AI assistant. Answer accurately."
-      f"\nWeb Search Context:\n{search_context}"
-  )
+  # Add prior history as plain text strings
+  for m in st.session_state.messages[:-1]:
+    api_messages.append({"role": m["role"], "content": m["content"]})
 
-  # Construct Messages Payload for API
-  api_messages = [{"role": "system", "content": system_prompt}]
-
-  # Append context/history
+  # Add current query payload
   api_messages.append({"role": "user", "content": user_content})
 
-  # Generate Response from Groq
+  # Call Groq API
   with st.chat_message("assistant"):
-    with st.spinner("NOVA is thinking..."):
-      response = groq_client.chat.completions.create(
-          model=active_model, messages=api_messages
-      )
-      reply = response.choices[0].message.content
-      st.markdown(reply)
+    with st.spinner("NOVA is analyzing..."):
+      try:
+        response = groq_client.chat.completions.create(
+            model=active_model, messages=api_messages
+        )
+        reply = response.choices[0].message.content
+        st.markdown(reply)
 
-  # Save Assistant Reply
-  st.session_state.messages.append({"role": "assistant", "content": reply})
+        # Save Assistant Reply
+        st.session_state.messages.append(
+            {"role": "assistant", "content": reply}
+        )
+      except Exception as e:
+        st.error(f"Error generating response: {e}")
