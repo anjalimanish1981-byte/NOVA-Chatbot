@@ -45,18 +45,31 @@ def save_chat_message(user_id, role, content, msg_type="text"):
 # ---------------------------------------------------------
 if "user" not in st.session_state:
     st.subheader("Sign In to Access NOVA AI")
+    
+    # Prompt for Full Name and Email
+    display_name = st.text_input("Enter your name:")
     email = st.text_input("Enter your email address:")
 
     col1, col2 = st.columns([1, 1])
 
     with col1:
         if st.button("Send OTP Code 📩", use_container_width=True):
-            if email:
+            if email and display_name:
                 try:
-                    res = supabase.auth.sign_in_with_otp({"email": email})
+                    # Save user's display name inside Supabase metadata
+                    res = supabase.auth.sign_in_with_otp({
+                        "email": email,
+                        "options": {
+                            "data": {
+                                "full_name": display_name
+                            }
+                        }
+                    })
                     st.success("Verification code sent to your email! Check your inbox.")
                 except Exception as e:
                     st.error(f"Error sending code: {e}")
+            elif not display_name:
+                st.warning("Please enter your name first.")
             else:
                 st.warning("Please enter a valid email address.")
 
@@ -67,6 +80,7 @@ if "user" not in st.session_state:
             try:
                 res = supabase.auth.verify_otp({"email": email, "token": otp_code, "type": "email"})
                 st.session_state.user = res.user
+                st.session_state.user_name = display_name if display_name else "Friend"
                 st.success("Successfully signed in!")
                 st.rerun()
             except Exception as e:
@@ -77,11 +91,13 @@ if "user" not in st.session_state:
 # ---------------------------------------------------------
 else:
     user_email = st.session_state.user.email
-    # Extract name from email (e.g., anjalimanish1981@gmail.com -> Anjalimanish1981)
-    user_name = user_email.split("@")[0].capitalize() if "@" in user_email else "User"
+    
+    # Retrieve user's display name from session or metadata
+    user_metadata = getattr(st.session_state.user, 'user_metadata', {}) or {}
+    user_name = st.session_state.get('user_name') or user_metadata.get('full_name') or user_email.split("@")[0].capitalize()
 
-    # Display personal greeting banner
-    st.write(f"### 👋 Welcome back, **{user_name}**!")
+    # Display personal greeting banner with their exact name
+    st.write(f"### 👋 Welcome, **{user_name}**!")
     st.caption(f"Logged in as: `{user_email}`")
     
     col_out, _ = st.columns([1, 3])
@@ -99,7 +115,7 @@ else:
         if db_history:
             st.session_state.messages = db_history
         else:
-            # First welcome message from NOVA if history is completely empty
+            # Welcome message addressing user by their entered name
             welcome_msg = f"Hello {user_name}! 👋 I am NOVA AI, your personal assistant. How can I help you today?"
             st.session_state.messages = [{"role": "assistant", "content": welcome_msg, "type": "text"}]
             save_chat_message(st.session_state.user.id, "assistant", welcome_msg, "text")
@@ -169,7 +185,7 @@ else:
                             messages=[
                                 {
                                     "role": "system", 
-                                    "content": f"You are NOVA AI, a helpful and friendly personal assistant. You are talking to {user_name}."
+                                    "content": f"You are NOVA AI, a helpful and friendly personal assistant. You are speaking with {user_name}."
                                 },
                                 {"role": "user", "content": user_prompt}
                             ],
