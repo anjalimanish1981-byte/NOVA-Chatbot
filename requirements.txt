@@ -2,3 +2,4 @@ streamlit
 groq
 tavily-python
 streamlit-mic-recorder
+supabase
