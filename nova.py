@@ -9,7 +9,6 @@ st.set_page_config(page_title="NOVA AI", page_icon="🤖", layout="centered")
 
 # --- SESSION STATE FOR MULTIPLE CHATS & HISTORY ---
 if "chats" not in st.session_state:
-  # Structure: {chat_id: {"title": "Chat Title", "messages": [...]}}
   st.session_state.chats = {
       "chat_1": {
           "title": "Welcome Chat",
@@ -27,7 +26,6 @@ if "active_chat_id" not in st.session_state:
   st.session_state.active_chat_id = "chat_1"
 
 
-# Function to create a new chat
 def create_new_chat():
   new_id = f"chat_{len(st.session_state.chats) + 1}"
   st.session_state.chats[new_id] = {
@@ -40,42 +38,16 @@ def create_new_chat():
   st.session_state.active_chat_id = new_id
 
 
-# --- SIDEBAR: RECENT CHATS & THEME CUSTOMIZER ---
-st.sidebar.button(
-    "➕ New Chat", on_click=create_new_chat, use_container_width=True
-)
-
-st.sidebar.markdown("### 🕒 Recent Chats")
-for chat_id, chat_data in list(st.session_state.chats.items())[::-1]:
-  # Highlight the active chat button
-  btn_type = (
-      "primary" if chat_id == st.session_state.active_chat_id else "secondary"
-  )
-  if st.sidebar.button(
-      chat_data["title"],
-      key=chat_id,
-      use_container_width=True,
-      type=btn_type,
-  ):
-    st.session_state.active_chat_id = chat_id
-    st.rerun()
-
-st.sidebar.markdown("---")
+# --- SIDEBAR: TOP CUSTOMIZER ---
 st.sidebar.title("🎨 Customizer")
 
-# Interactive Color Pickers
-header_color = st.sidebar.color_picker("Header Color", "#1A73E8")
-card_bg_color = st.sidebar.color_picker("Card Background", "#F0F4F9")
-accent_border = st.sidebar.color_picker("Accent Border", "#E0A96D")
-text_color = st.sidebar.color_picker("Card Text Color", "#1F1F1F")
-
-# Quick Presets
-st.sidebar.markdown("---")
+# Preset Selector
 preset = st.sidebar.radio(
     "Choose Preset:",
     ["Custom", "Dark Blue & Gold", "Classic Light", "Dark Mode"],
 )
 
+# Set Color Values Based on Preset Selection
 if preset == "Dark Blue & Gold":
   header_color = "#E0A96D"
   card_bg_color = "#0D1B2A"
@@ -91,8 +63,35 @@ elif preset == "Dark Mode":
   card_bg_color = "#1E1E1E"
   accent_border = "#4D94FF"
   text_color = "#F0F0F0"
+else:
+  # Individual Color Pickers for Custom Mode
+  header_color = st.sidebar.color_picker("Header Color", "#1A73E8")
+  card_bg_color = st.sidebar.color_picker("Card Background", "#F0F4F9")
+  accent_border = st.sidebar.color_picker("Accent Border", "#E0A96D")
+  text_color = st.sidebar.color_picker("Card Text Color", "#1F1F1F")
 
-# Inject Dynamic CSS
+st.sidebar.markdown("---")
+
+# --- SIDEBAR: RECENT CHATS ---
+st.sidebar.button(
+    "➕ New Chat", on_click=create_new_chat, use_container_width=True
+)
+
+st.sidebar.markdown("### 🕒 Recent Chats")
+for chat_id, chat_data in list(st.session_state.chats.items())[::-1]:
+  btn_type = (
+      "primary" if chat_id == st.session_state.active_chat_id else "secondary"
+  )
+  if st.sidebar.button(
+      chat_data["title"],
+      key=chat_id,
+      use_container_width=True,
+      type=btn_type,
+  ):
+    st.session_state.active_chat_id = chat_id
+    st.rerun()
+
+# Inject Dynamic Custom Styling
 st.markdown(
     f"""
     <style>
