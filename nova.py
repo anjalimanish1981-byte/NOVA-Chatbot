@@ -7,29 +7,60 @@ from tavily import TavilyClient
 # 1. Page Configuration
 st.set_page_config(page_title="NOVA AI", page_icon="🤖", layout="centered")
 
-# Custom CSS to tightly group controls above chat_input
+# --- SIDEBAR THEME CUSTOMIZER ---
+st.sidebar.title("🎨 Customizer")
+st.sidebar.markdown("Customize NOVA's appearance live:")
+
+# Interactive Color Pickers with defaults
+header_color = st.sidebar.color_picker("Header Color", "#1A73E8")
+card_bg_color = st.sidebar.color_picker("Card Background", "#F0F4F9")
+accent_border = st.sidebar.color_picker("Accent Border", "#E0A96D")
+text_color = st.sidebar.color_picker("Card Text Color", "#1F1F1F")
+
+# Quick Preset Shortcuts
+st.sidebar.markdown("---")
+st.sidebar.subheader("Quick Presets")
+preset = st.sidebar.radio(
+    "Choose Preset:",
+    ["Custom", "Dark Blue & Gold", "Classic Light", "Dark Mode"],
+)
+
+if preset == "Dark Blue & Gold":
+  header_color = "#E0A96D"
+  card_bg_color = "#0D1B2A"
+  accent_border = "#E0A96D"
+  text_color = "#FFFFFF"
+elif preset == "Classic Light":
+  header_color = "#1A73E8"
+  card_bg_color = "#F0F4F9"
+  accent_border = "#1A73E8"
+  text_color = "#1F1F1F"
+elif preset == "Dark Mode":
+  header_color = "#4D94FF"
+  card_bg_color = "#1E1E1E"
+  accent_border = "#4D94FF"
+  text_color = "#F0F0F0"
+
+# Inject Dynamic CSS based on user selections
 st.markdown(
-    """
+    f"""
     <style>
-        .welcome-card {
-            background-color: #f0f4f9;
+        .welcome-card {{
+            background-color: {card_bg_color};
+            color: {text_color};
             padding: 20px;
             border-radius: 16px;
             margin-bottom: 20px;
-            border-left: 5px solid #1a73e8;
+            border-left: 6px solid {accent_border};
             font-family: sans-serif;
-        }
-        .welcome-card h2 {
-            color: #1a73e8;
+        }}
+        .welcome-card h2 {{
+            color: {header_color};
             margin-top: 0;
-        }
-        /* Tight bottom bar styling */
-        .block-container {
-            padding-bottom: 5rem;
-        }
-        div[data-testid="stFileUploader"] {
-            margin-top: -10px;
-        }
+        }}
+        h1 {{
+            color: {header_color} !important;
+        }}
     </style>
 """,
     unsafe_allow_html=True,
@@ -93,8 +124,8 @@ for message in st.session_state.messages:
   with st.chat_message(message["role"]):
     st.markdown(message["content"])
 
-# 6. Integrated Bottom Action Bar
-st.write("")  # Spacing
+# 6. Integrated Action Bar
+st.write("")
 col_attach, col_model, col_voice = st.columns([1, 2, 1])
 
 with col_attach:
@@ -125,7 +156,7 @@ with col_voice:
       key="voice_input",
   )
 
-# 7. Text Input Bar directly underneath controls
+# 7. Text Input Bar
 typed_prompt = st.chat_input("Ask NOVA anything...")
 
 # Process Input
