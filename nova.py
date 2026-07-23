@@ -21,6 +21,25 @@ groq_client = Groq(api_key=GROQ_API_KEY)
 
 st.title("🤖 NOVA AI Generator")
 
+# Helper functions for database chat history
+def load_chat_history(user_id):
+    try:
+        res = supabase.table("chat_history").select("*").eq("user_id", user_id).order("id", desc=False).execute()
+        return res.data if res.data else []
+    except Exception as e:
+        return []
+
+def save_chat_message(user_id, role, content, msg_type="text"):
+    try:
+        supabase.table("chat_history").insert({
+            "user_id": str(user_id),
+            "role": role,
+            "content": content,
+            "type": msg_type
+        }).execute()
+    except Exception as e:
+        pass
+
 # ---------------------------------------------------------
 # 1. USER AUTHENTICATION SECTION (OTP SIGN IN)
 # ---------------------------------------------------------
@@ -57,13 +76,35 @@ if "user" not in st.session_state:
 # 2. LOGGED-IN CHAT, VOICE, IMAGE & GROQ/TAVILY AI
 # ---------------------------------------------------------
 else:
-    st.write(f"Logged in as: **{st.session_state.user.email}**")
-    st.caption("Welcome! Ask anything, request an image, or search the web.")
+    user_email = st.session_state.user.email
+    # Extract name from email (e.g., anjalimanish1981@gmail.com -> Anjalimanish1981)
+    user_name = user_email.split("@")[0].capitalize() if "@" in user_email else "User"
 
+    # Display personal greeting banner
+    st.write(f"### 👋 Welcome back, **{user_name}**!")
+    st.caption(f"Logged in as: `{user_email}`")
+    
+    col_out, _ = st.columns([1, 3])
+    with col_out:
+        if st.button("Sign Out 🚪"):
+            supabase.auth.sign_out()
+            st.session_state.clear()
+            st.rerun()
+
+    st.divider()
+
+    # Load persistent history from Supabase on initial login
     if "messages" not in st.session_state:
-        st.session_state.messages = []
+        db_history = load_chat_history(st.session_state.user.id)
+        if db_history:
+            st.session_state.messages = db_history
+        else:
+            # First welcome message from NOVA if history is completely empty
+            welcome_msg = f"Hello {user_name}! 👋 I am NOVA AI, your personal assistant. How can I help you today?"
+            st.session_state.messages = [{"role": "assistant", "content": welcome_msg, "type": "text"}]
+            save_chat_message(st.session_state.user.id, "assistant", welcome_msg, "text")
 
-    # Display prior conversation history
+    # Display all saved conversation history
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             if message.get("type") == "image":
@@ -80,12 +121,13 @@ else:
         key='speech_input'
     )
 
-    typed_prompt = st.chat_input("Ask NOVA AI or describe an image to generate...")
+    typed_prompt = st.chat_input(f"Ask NOVA AI anything, {user_name}...")
     user_prompt = spoken_text if spoken_text else typed_prompt
 
     if user_prompt:
         st.chat_message("user").write(user_prompt)
-        st.session_state.messages.append({"role": "user", "content": user_prompt})
+        st.session_state.messages.append({"role": "user", "content": user_prompt, "type": "text"})
+        save_chat_message(st.session_state.user.id, "user", user_prompt, "text")
 
         # Image generation keywords check
         image_keywords = ["image", "generate", "picture", "draw", "photo", "create an image", "logo"]
@@ -99,6 +141,7 @@ else:
 
                 st.image(image_url, caption=f"Result for: {user_prompt}")
                 st.session_state.messages.append({"role": "assistant", "content": image_url, "type": "image"})
+                save_chat_message(st.session_state.user.id, "assistant", image_url, "image")
         else:
             with st.chat_message("assistant"):
                 bot_response = ""
@@ -124,17 +167,21 @@ else:
                     try:
                         chat_completion = groq_client.chat.completions.create(
                             messages=[
-                                {"role": "system", "content": "You are NOVA AI, a smart and friendly personal assistant."},
+                                {
+                                    "role": "system", 
+                                    "content": f"You are NOVA AI, a helpful and friendly personal assistant. You are talking to {user_name}."
+                                },
                                 {"role": "user", "content": user_prompt}
                             ],
                             model="llama-3.3-70b-versatile",
                         )
                         bot_response = chat_completion.choices[0].message.content
                     except Exception as e:
-                        bot_response = f"🤖 I am NOVA AI! How can I assist you with: '{user_prompt}'?"
+                        bot_response = f"🤖 Hello {user_name}! How can I assist you with: '{user_prompt}'?"
 
                 if not bot_response:
-                    bot_response = f"🤖 Hello! I am NOVA AI. How can I help you today?"
+                    bot_response = f"🤖 Hello {user_name}! How can I help you today?"
 
                 st.write(bot_response)
-                st.session_state.messages.append({"role": "assistant", "content": bot_response})
+                st.session_state.messages.append({"role": "assistant", "content": bot_response, "type": "text"})
+                save_chat_message(st.session_state.user.id, "assistant", bot_response, "text")
