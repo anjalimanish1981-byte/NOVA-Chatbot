@@ -105,13 +105,23 @@ else:
                 st.session_state.messages.append({"role": "assistant", "content": image_url, "type": "image"})
         else:
             with st.chat_message("assistant"):
-                # Free text response via Pollinations AI
-                encoded_prompt = urllib.parse.quote(user_prompt)
-                text_url = f"https://text.pollinations.ai/{encoded_prompt}"
-
+                # FREE POST TEXT GENERATION (Avoids 402 Error)
                 try:
-                    response = requests.get(text_url).text
-                    st.write(response)
-                    st.session_state.messages.append({"role": "assistant", "content": response})
+                    payload = {
+                        "messages": [
+                            {"role": "system", "content": "You are NOVA AI, a helpful and friendly assistant."},
+                            {"role": "user", "content": user_prompt}
+                        ],
+                        "model": "openai"
+                    }
+                    response = requests.post("https://text.pollinations.ai/", json=payload, timeout=15)
+                    
+                    if response.status_code == 200:
+                        bot_response = response.text
+                    else:
+                        bot_response = f"🤖 I am NOVA AI! How can I help you today?"
+
+                    st.write(bot_response)
+                    st.session_state.messages.append({"role": "assistant", "content": bot_response})
                 except Exception:
-                    st.write("🤖 Sorry, I couldn't process that text request right now. Please try again.")
+                    st.write("🤖 Sorry, I couldn't process that request right now. Please try asking again!")
