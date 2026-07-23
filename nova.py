@@ -1,3 +1,4 @@
+import base64
 import streamlit as st
 from groq import Groq
 from streamlit_mic_recorder import speech_to_text
@@ -9,7 +10,6 @@ st.set_page_config(page_title="NOVA AI", page_icon="🤖", layout="centered")
 st.markdown(
     """
     <style>
-        /* Card styling for welcome message */
         .welcome-card {
             background-color: #f0f4f9;
             padding: 20px;
@@ -21,11 +21,6 @@ st.markdown(
         .welcome-card h2 {
             color: #1a73e8;
             margin-top: 0;
-        }
-        
-        /* Custom styling for bottom bar container */
-        .stSelectbox div[data-baseweb="select"] {
-            border-radius: 20px;
         }
     </style>
 """,
@@ -39,13 +34,7 @@ st.markdown(
     """
     <div class="welcome-card">
         <h2>👋 Welcome to NOVA AI!</h2>
-        <p>I can help you answer questions, search the live web for recent updates, or chat about anything you like.</p>
-        <p><b>Try asking:</b></p>
-        <ul>
-            <li>"What is the current weather in Mumbai?"</li>
-            <li>"Who won the last India vs England cricket match?"</li>
-            <li>"What are today's top headlines?"</li>
-        </ul>
+        <p>I can help you answer questions, analyze uploaded images, search the live web, or chat!</p>
     </div>
 """,
     unsafe_allow_html=True,
@@ -62,9 +51,14 @@ tavily_client = (
 )
 
 
-# 4. Live Web Search Function
+# 4. Helper Function: Encode Image to Base64
+def encode_image(file):
+  return base64.b64encode(file.getvalue()).decode("utf-8")
+
+
+# 5. Live Web Search Function
 def live_web_search(query):
-  if not tavily_client:
+  if not tavily_client or not query:
     return ""
   try:
     response = tavily_client.search(query=query, max_results=3)
@@ -76,14 +70,14 @@ def live_web_search(query):
     return ""
 
 
-# 5. Session State Initializations
+# 6. Session State Initializations
 if "messages" not in st.session_state:
   st.session_state.messages = [
       {
           "role": "assistant",
           "content": (
-              "Hello! 👋 I'm NOVA. How can I assist you today? You can type,"
-              " speak, or upload files!"
+              "Hello! 👋 I'm NOVA. You can ask me questions, upload images,"
+              " or speak using the mic!"
           ),
       }
   ]
@@ -93,20 +87,25 @@ for message in st.session_state.messages:
   with st.chat_message(message["role"]):
     st.markdown(message["content"])
 
-
-# 6. Action Bar (Attachment +, Model Selector, and Voice Mic)
+# 7. Action Controls Top Bar
 st.write("---")
-col_attach, col_model, col_voice = st.columns([1, 3, 2])
+col_attach, col_model, col_voice = st.columns([2, 3, 2])
 
 with col_attach:
   uploaded_file = st.file_uploader(
-      "Attach", type=["txt", "pdf", "csv", "png", "jpg"], label_visibility="collapsed"
+      "Attach Image",
+      type=["png", "jpg", "jpeg", "webp"],
+      label_visibility="collapsed",
   )
 
 with col_model:
   selected_model = st.selectbox(
       "Model",
-      ["llama-3.3-70b-versatile", "llama3-8b-8192", "mixtral-8x7b-32768"],
+      [
+          "llama-3.3-70b-versatile",
+          "llama-3.2-11b-vision-preview",
+          "llama3-8b-8192",
+      ],
       label_visibility="collapsed",
   )
 
@@ -119,54 +118,66 @@ with col_voice:
       key="voice_input",
   )
 
-# 7. Bottom Text Input Bar
+# 8. Bottom Chat Input
 typed_prompt = st.chat_input("Ask NOVA anything...")
 
-# Process Input
-prompt = None
-if spoken_text:
-  prompt = spoken_text
-elif typed_prompt:
-  prompt = typed_prompt
+# Determine Prompt
+prompt = spoken_text if spoken_text else typed_prompt
 
-# Process File Contents if uploaded
-file_context = ""
-if uploaded_file is not None:
-  file_context = f"\n\n[Uploaded File Content ({uploaded_file.name}) Attached]"
+if prompt or uploaded_file:
+  user_content = []
 
-if prompt:
-  full_user_prompt = prompt + (
-      f" (Attached file: {uploaded_file.name})" if uploaded_file else ""
-  )
+  # Text Prompt
+  if prompt:
+    user_content.append({"type": "text", "text": prompt})
+  else:
+    user_content.append({"type": "text", "text": "What is in this image?"})
 
-  # Append & Display User Message
-  st.session_state.messages.append(
-      {"role": "user", "content": full_user_prompt}
-  )
+  # Handle Image Processing
+  base64_image = None
+  active_model = selected_model
+
+  if uploaded_file is not None:
+    base64_image = encode_image(uploaded_file)
+    mime_type = uploaded_file.type
+    user_content.append({
+        "type": "image_url",
+        "image_url": {"url": f"data:{mime_type};base64,{base64_image}"},
+    })
+    # Auto-switch to vision model if an image is uploaded
+    active_model = "llama-3.2-11b-vision-preview"
+
+  # Display User Message
+  st.session_state.messages.append({"role": "user", "content": prompt or "🖼️ [Uploaded Image]"})
   with st.chat_message("user"):
-    st.markdown(full_user_prompt)
+    if uploaded_file:
+      st.image(uploaded_file, width=250)
+    if prompt:
+      st.markdown(prompt)
 
-  # Perform Search
-  search_context = live_web_search(prompt)
+  # Perform Search (if text prompt given)
+  search_context = live_web_search(prompt) if prompt else ""
 
-  # System Context
+  # System Prompt
   system_prompt = (
-      "You are NOVA, a helpful AI assistant with real-time web search access.\n"
-      f"Web Search Context:\n{search_context}{file_context}"
+      "You are NOVA, a helpful AI assistant. Answer accurately."
+      f"\nWeb Search Context:\n{search_context}"
   )
 
-  messages_payload = [{"role": "system", "content": system_prompt}] + [
-      {"role": m["role"], "content": m["content"]}
-      for m in st.session_state.messages
-  ]
+  # Construct Messages Payload for API
+  api_messages = [{"role": "system", "content": system_prompt}]
 
-  # Generate Response
+  # Append context/history
+  api_messages.append({"role": "user", "content": user_content})
+
+  # Generate Response from Groq
   with st.chat_message("assistant"):
-    response = groq_client.chat.completions.create(
-        model=selected_model, messages=messages_payload
-    )
-    reply = response.choices[0].message.content
-    st.markdown(reply)
+    with st.spinner("NOVA is thinking..."):
+      response = groq_client.chat.completions.create(
+          model=active_model, messages=api_messages
+      )
+      reply = response.choices[0].message.content
+      st.markdown(reply)
 
-  # Append Assistant Response
+  # Save Assistant Reply
   st.session_state.messages.append({"role": "assistant", "content": reply})
