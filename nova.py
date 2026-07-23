@@ -8,9 +8,9 @@ from groq import Groq
 # Page Config
 st.set_page_config(page_title="NOVA AI Generator", page_icon="🤖", layout="centered")
 
-# Hardcoded Keys (Bypassing Streamlit Secrets Box)
+# Hardcoded Keys
 SUPABASE_URL = "https://wecsfbazfodlypiybymb.supabase.co"
-SUPABASE_KEY = "sb_publishable_gVeF5AWQnSWRQJuWMzBLWiAju"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndlY3NmYmF6Zm9kbHlwaXlieW1iIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4MTYyOTksImV4cCI6MjEwMDM5MjI5OX0.dHkQR-3EDtIBRzhv0FT7cXBXv26ZG3IfV7ip2GjFcYk"
 TAVILY_API_KEY = "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"
 GROQ_API_KEY = "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"
 
