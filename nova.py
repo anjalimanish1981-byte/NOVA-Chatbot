@@ -12,7 +12,7 @@ st.set_page_config(page_title="NOVA AI Generator", page_icon="🤖", layout="cen
 SUPABASE_URL = "https://wecsfbazfodlypiybymb.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndlY3NmYmF6Zm9kbHlwaXlieW1iIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4MTYyOTksImV4cCI6MjEwMDM5MjI5OX0.dHkQR-3EDtIBRzhv0FT7cXBXv26ZG3IfV7ip2GjFcYk"
 TAVILY_API_KEY = "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"
-GROQ_API_KEY = "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"
+GROQ_API_KEY = "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"
 
 # Initialize Clients
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -153,9 +153,9 @@ else:
             with st.chat_message("assistant"):
                 bot_response = ""
 
-                # Expanded search keywords including 'fastest', 'best', 'what', 'which', etc.
-                search_keywords = ["latest", "news", "today", "search", "who is", "weather", "score", "rate", "fastest", "best", "what", "which", "india"]
-                needs_search = any(word in user_prompt.lower() for word in search_keywords)
+                # Explicit intent phrases that require live web search
+                search_keywords = ["search web", "latest news", "today news", "weather today", "live score"]
+                needs_search = any(phrase in user_prompt.lower() for phrase in search_keywords)
 
                 if needs_search and tavily_client:
                     try:
@@ -165,16 +165,17 @@ else:
                             bot_response = "🌐 **Live Web Search Results:**\n\n"
                             for r in results:
                                 bot_response += f"• **[{r['title']}]({r['url']})**\n{r['content']}\n\n"
-                    except Exception as e:
+                    except Exception:
                         bot_response = ""
 
+                # General conversations and AI responses using Groq
                 if not bot_response and groq_client:
                     try:
                         chat_completion = groq_client.chat.completions.create(
                             messages=[
                                 {
-                                "role": "system", 
-                                "content": f"You are NOVA AI, a helpful and friendly personal assistant. You are speaking with {user_name}."
+                                    "role": "system", 
+                                    "content": f"You are NOVA AI, a helpful and friendly personal assistant. You are speaking with {user_name}."
                                 },
                                 {"role": "user", "content": user_prompt}
                             ],
