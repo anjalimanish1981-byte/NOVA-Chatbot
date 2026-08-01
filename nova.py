@@ -46,7 +46,6 @@ def save_chat_message(user_id, role, content, msg_type="text"):
 if "user" not in st.session_state:
     st.subheader("Sign In to Access NOVA AI")
     
-    # Prompt for Full Name and Email
     display_name = st.text_input("Enter your name:")
     email = st.text_input("Enter your email address:")
 
@@ -56,7 +55,6 @@ if "user" not in st.session_state:
         if st.button("Send OTP Code 📩", use_container_width=True):
             if email and display_name:
                 try:
-                    # Save user's display name inside Supabase metadata
                     res = supabase.auth.sign_in_with_otp({
                         "email": email,
                         "options": {
@@ -92,11 +90,9 @@ if "user" not in st.session_state:
 else:
     user_email = st.session_state.user.email
     
-    # Retrieve user's display name from session or metadata
     user_metadata = getattr(st.session_state.user, 'user_metadata', {}) or {}
     user_name = st.session_state.get('user_name') or user_metadata.get('full_name') or user_email.split("@")[0].capitalize()
 
-    # Display personal greeting banner with their exact name
     st.write(f"### 👋 Welcome, **{user_name}**!")
     st.caption(f"Logged in as: `{user_email}`")
     
@@ -109,18 +105,15 @@ else:
 
     st.divider()
 
-    # Load persistent history from Supabase on initial login
     if "messages" not in st.session_state:
         db_history = load_chat_history(st.session_state.user.id)
         if db_history:
             st.session_state.messages = db_history
         else:
-            # Welcome message addressing user by their entered name
             welcome_msg = f"Hello {user_name}! 👋 I am NOVA AI, your personal assistant. How can I help you today?"
             st.session_state.messages = [{"role": "assistant", "content": welcome_msg, "type": "text"}]
             save_chat_message(st.session_state.user.id, "assistant", welcome_msg, "text")
 
-    # Display all saved conversation history
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             if message.get("type") == "image":
@@ -128,7 +121,6 @@ else:
             else:
                 st.write(message["content"])
 
-    # Voice Input
     st.write("🎙️ **Voice Assistant:** Click below to speak your prompt")
     spoken_text = speech_to_text(
         language='en',
@@ -145,7 +137,6 @@ else:
         st.session_state.messages.append({"role": "user", "content": user_prompt, "type": "text"})
         save_chat_message(st.session_state.user.id, "user", user_prompt, "text")
 
-        # Image generation keywords check
         image_keywords = ["image", "generate", "picture", "draw", "photo", "create an image", "logo"]
         is_image_request = any(word in user_prompt.lower() for word in image_keywords)
 
@@ -162,11 +153,10 @@ else:
             with st.chat_message("assistant"):
                 bot_response = ""
 
-                # Check if prompt requires a web search
-                search_keywords = ["latest", "news", "today", "search", "who is", "weather", "score", "rate"]
+                # Expanded search keywords including 'fastest', 'best', 'what', 'which', etc.
+                search_keywords = ["latest", "news", "today", "search", "who is", "weather", "score", "rate", "fastest", "best", "what", "which", "india"]
                 needs_search = any(word in user_prompt.lower() for word in search_keywords)
 
-                # 1. Search with Tavily if search keywords detected
                 if needs_search and tavily_client:
                     try:
                         search_res = tavily_client.search(query=user_prompt, max_results=3)
@@ -175,17 +165,16 @@ else:
                             bot_response = "🌐 **Live Web Search Results:**\n\n"
                             for r in results:
                                 bot_response += f"• **[{r['title']}]({r['url']})**\n{r['content']}\n\n"
-                    except Exception:
+                    except Exception as e:
                         bot_response = ""
 
-                # 2. Process query with Groq LLM (LLaMA 3.3)
                 if not bot_response and groq_client:
                     try:
                         chat_completion = groq_client.chat.completions.create(
                             messages=[
                                 {
-                                    "role": "system", 
-                                    "content": f"You are NOVA AI, a helpful and friendly personal assistant. You are speaking with {user_name}."
+                                "role": "system", 
+                                "content": f"You are NOVA AI, a helpful and friendly personal assistant. You are speaking with {user_name}."
                                 },
                                 {"role": "user", "content": user_prompt}
                             ],
@@ -193,7 +182,7 @@ else:
                         )
                         bot_response = chat_completion.choices[0].message.content
                     except Exception as e:
-                        bot_response = f"🤖 Hello {user_name}! How can I assist you with: '{user_prompt}'?"
+                        bot_response = f"🤖 Groq API Error: {e}"
 
                 if not bot_response:
                     bot_response = f"🤖 Hello {user_name}! How can I help you today?"
