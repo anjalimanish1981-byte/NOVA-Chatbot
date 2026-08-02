@@ -153,29 +153,46 @@ else:
             with st.chat_message("assistant"):
                 bot_response = ""
 
-                # Explicit intent phrases that require live web search
-                search_keywords = ["search web", "latest news", "today news", "weather today", "live score"]
-                needs_search = any(phrase in user_prompt.lower() for phrase in search_keywords)
+                # Expanded keywords that indicate a real-time, sports, or news question
+                search_keywords = [
+                    "who won", "score", "match", "vs", "winner", "today", "yesterday", 
+                    "latest", "news", "weather", "price", "rate", "search", "current",
+                    "ipl", "cricket", "football", "world cup"
+                ]
+                user_prompt_lower = user_prompt.lower()
+                needs_search = any(keyword in user_prompt_lower for keyword in search_keywords)
 
                 if needs_search and tavily_client:
                     try:
                         search_res = tavily_client.search(query=user_prompt, max_results=3)
                         results = search_res.get("results", [])
                         if results:
-                            bot_response = "🌐 **Live Web Search Results:**\n\n"
-                            for r in results:
-                                bot_response += f"• **[{r['title']}]({r['url']})**\n{r['content']}\n\n"
+                            # Pass web search results to Groq LLaMA to write a natural summary
+                            search_context = "\n".join([f"- {r['title']}: {r['content']}" for r in results])
+                            system_instruction = (
+                                f"You are NOVA AI, a helpful personal assistant talking with {user_name}. "
+                                f"Answer {user_name}'s question accurately and concisely using the real-time search results below:\n\n{search_context}"
+                            )
+                            
+                            chat_completion = groq_client.chat.completions.create(
+                                messages=[
+                                    {"role": "system", "content": system_instruction},
+                                    {"role": "user", "content": user_prompt}
+                                ],
+                                model="llama-3.3-70b-versatile",
+                            )
+                            bot_response = chat_completion.choices[0].message.content
                     except Exception:
                         bot_response = ""
 
-                # General conversations and AI responses using Groq
+                # Standard LLM response if web search was not needed or search failed
                 if not bot_response and groq_client:
                     try:
                         chat_completion = groq_client.chat.completions.create(
                             messages=[
                                 {
                                     "role": "system", 
-                                    "content": f"You are NOVA AI, a helpful and friendly personal assistant. You are speaking with {user_name}."
+                                    "content": f"You are NOVA AI, a helpful and friendly personal assistant speaking with {user_name}."
                                 },
                                 {"role": "user", "content": user_prompt}
                             ],
