@@ -16,7 +16,7 @@ st.set_page_config(
 # API CLIENT INITIALIZATION
 # ---------------------------------------------------------
 GROQ_API_KEY = "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"
-TAVILY_API_KEY = "tvly-YOUR_TAVILY_API_KEY_HERE"  # Optional: Replace if using web search
+TAVILY_API_KEY = "tvly-YOUR_TAVILY_API_KEY_HERE"  # Optional: Add key for web search
 
 groq_client = Groq(api_key=GROQ_API_KEY)
 
@@ -39,7 +39,7 @@ def search_web(query):
         return ""
 
 def needs_web_search(user_prompt):
-    triggers = ["today", "latest", "current", "news", "price", "weather", "score", "match", "who is", "what is happening", "2024", "2025", "2026"]
+    triggers = ["today", "latest", "current", "news", "price", "weather", "score", "match", "who is", "what is happening", "2025", "2026"]
     return any(t in user_prompt.lower() for t in triggers)
 
 # ---------------------------------------------------------
@@ -60,8 +60,8 @@ with st.sidebar:
     model_option = st.selectbox(
         "Select Model:",
         [
-            "llama-3.1-70b-versatile",
             "llama-3.1-8b-instant",
+            "llama-3.3-70b-specdec",
             "mixtral-8x7b-32768",
             "gemma2-9b-it"
         ]
