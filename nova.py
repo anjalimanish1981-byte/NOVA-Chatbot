@@ -25,16 +25,18 @@ try:
 except Exception:
     tavily_client = None
 
-# Dynamically fetch available chat models from Groq
+# Dynamically fetch available chat models from Groq (prioritizing general English models)
 @st.cache_data(ttl=3600)
 def get_available_groq_models():
     try:
         model_list = groq_client.models.list()
         chat_models = [
             m.id for m in model_list.data 
-            if not any(x in m.id.lower() for x in ["whisper", "guard", "safeguard", "embed"])
+            if not any(x in m.id.lower() for x in ["whisper", "guard", "safeguard", "embed", "allam"])
         ]
-        return sorted(chat_models) if chat_models else ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
+        # Sort so Llama models appear first at the top
+        chat_models.sort(key=lambda x: (not x.startswith("llama"), x))
+        return chat_models if chat_models else ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
     except Exception:
         return ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it"]
 
@@ -120,6 +122,7 @@ if user_input:
 
             system_prompt = (
                 f"You are NOVA, a smart, versatile AI companion. Tone: {system_tone}. "
+                f"Always answer in English unless the user explicitly asks in another language. "
                 f"Current date: {datetime.date.today()}. "
             )
             if web_context:
