@@ -16,7 +16,7 @@ st.set_page_config(
 # API CLIENT INITIALIZATION
 # ---------------------------------------------------------
 # Replace with your API keys if needed
-GROQ_API_KEY = "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"
+GROQ_API_KEY = "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"
 TAVILY_API_KEY = "tvly-YOUR_TAVILY_API_KEY_HERE"  # Replace with your Tavily key
 
 groq_client = Groq(api_key=GROQ_API_KEY)
