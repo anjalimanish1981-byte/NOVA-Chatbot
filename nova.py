@@ -25,26 +25,13 @@ try:
 except Exception:
     tavily_client = None
 
-# Curated list of reliable, standard production models on Groq
-VALID_MODELS = [
-    "llama-3.3-70b-versatile",
-    "llama-3.1-8b-instant",
-    "mixtral-8x7b-32768",
-    "gemma2-9b-it"
+# Active production chat models on Groq
+ACTIVE_MODELS = [
+    "openai/gpt-oss-120b",
+    "openai/gpt-oss-20b",
+    "qwen/qwen3.6-27b",
+    "groq/compound"
 ]
-
-@st.cache_data(ttl=3600)
-def get_available_groq_models():
-    try:
-        model_list = groq_client.models.list()
-        active_ids = {m.id for m in model_list.data}
-        # Keep only verified standard models that exist in your account
-        filtered = [m for m in VALID_MODELS if m in active_ids]
-        return filtered if filtered else VALID_MODELS
-    except Exception:
-        return VALID_MODELS
-
-available_models = get_available_groq_models()
 
 # ---------------------------------------------------------
 # HELPER FUNCTIONS
@@ -81,8 +68,8 @@ with st.sidebar:
     st.title("⚙️ NOVA Settings")
     
     model_option = st.selectbox(
-        "Select Active Model:",
-        options=available_models,
+        "Select Model:",
+        options=ACTIVE_MODELS,
         index=0
     )
     
@@ -127,6 +114,7 @@ if user_input:
 
             system_prompt = (
                 f"You are NOVA, a smart, versatile AI companion. Tone: {system_tone}. "
+                f"Always answer clearly in English unless requested otherwise. "
                 f"Current date: {datetime.date.today()}. "
             )
             if web_context:
