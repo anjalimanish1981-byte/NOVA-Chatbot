@@ -25,20 +25,24 @@ try:
 except Exception:
     tavily_client = None
 
-# Dynamically fetch available chat models from Groq (prioritizing general English models)
+# Curated list of reliable, standard production models on Groq
+VALID_MODELS = [
+    "llama-3.3-70b-versatile",
+    "llama-3.1-8b-instant",
+    "mixtral-8x7b-32768",
+    "gemma2-9b-it"
+]
+
 @st.cache_data(ttl=3600)
 def get_available_groq_models():
     try:
         model_list = groq_client.models.list()
-        chat_models = [
-            m.id for m in model_list.data 
-            if not any(x in m.id.lower() for x in ["whisper", "guard", "safeguard", "embed", "allam"])
-        ]
-        # Sort so Llama models appear first at the top
-        chat_models.sort(key=lambda x: (not x.startswith("llama"), x))
-        return chat_models if chat_models else ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
+        active_ids = {m.id for m in model_list.data}
+        # Keep only verified standard models that exist in your account
+        filtered = [m for m in VALID_MODELS if m in active_ids]
+        return filtered if filtered else VALID_MODELS
     except Exception:
-        return ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it"]
+        return VALID_MODELS
 
 available_models = get_available_groq_models()
 
@@ -78,7 +82,8 @@ with st.sidebar:
     
     model_option = st.selectbox(
         "Select Active Model:",
-        options=available_models
+        options=available_models,
+        index=0
     )
     
     system_tone = st.selectbox(
@@ -122,7 +127,6 @@ if user_input:
 
             system_prompt = (
                 f"You are NOVA, a smart, versatile AI companion. Tone: {system_tone}. "
-                f"Always answer in English unless the user explicitly asks in another language. "
                 f"Current date: {datetime.date.today()}. "
             )
             if web_context:
