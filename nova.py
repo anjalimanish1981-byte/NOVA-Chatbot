@@ -16,7 +16,7 @@ st.set_page_config(
 # API CLIENT INITIALIZATION
 # ---------------------------------------------------------
 GROQ_API_KEY = "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"
-TAVILY_API_KEY = "tvly-YOUR_TAVILY_API_KEY_HERE"  # Optional: Add key for web search
+TAVILY_API_KEY = "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"
 
 groq_client = Groq(api_key=GROQ_API_KEY)
 
@@ -24,6 +24,21 @@ try:
     tavily_client = TavilyClient(api_key=TAVILY_API_KEY)
 except Exception:
     tavily_client = None
+
+# Dynamically fetch available chat models from Groq
+@st.cache_data(ttl=3600)
+def get_available_groq_models():
+    try:
+        model_list = groq_client.models.list()
+        chat_models = [
+            m.id for m in model_list.data 
+            if not any(x in m.id.lower() for x in ["whisper", "guard", "safeguard", "embed"])
+        ]
+        return sorted(chat_models) if chat_models else ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
+    except Exception:
+        return ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it"]
+
+available_models = get_available_groq_models()
 
 # ---------------------------------------------------------
 # HELPER FUNCTIONS
@@ -39,7 +54,10 @@ def search_web(query):
         return ""
 
 def needs_web_search(user_prompt):
-    triggers = ["today", "latest", "current", "news", "price", "weather", "score", "match", "who is", "what is happening", "2025", "2026"]
+    triggers = [
+        "today", "latest", "current", "news", "price", "weather", 
+        "score", "match", "who is", "what is happening", "2025", "2026"
+    ]
     return any(t in user_prompt.lower() for t in triggers)
 
 # ---------------------------------------------------------
@@ -56,15 +74,9 @@ if "messages" not in st.session_state:
 with st.sidebar:
     st.title("⚙️ NOVA Settings")
     
-    # Active, stable Groq production models
     model_option = st.selectbox(
-        "Select Model:",
-        [
-            "llama-3.1-8b-instant",
-            "llama-3.3-70b-specdec",
-            "mixtral-8x7b-32768",
-            "gemma2-9b-it"
-        ]
+        "Select Active Model:",
+        options=available_models
     )
     
     system_tone = st.selectbox(
@@ -83,7 +95,7 @@ with st.sidebar:
 # MAIN CHAT INTERFACE
 # ---------------------------------------------------------
 st.title("🤖 NOVA AI Generator")
-st.caption(f"Fast AI Assistant powered by Groq ({model_option})")
+st.caption(f"Fast AI Assistant powered by Groq (`{model_option}`) with Tavily Web Search")
 
 # Display previous messages
 for msg in st.session_state.messages:
@@ -101,7 +113,7 @@ if user_input:
 
     # Generate assistant response
     with st.chat_message("assistant"):
-        with st.spinner("Thinking..."):
+        with st.spinner("Thinking & searching..."):
             web_context = ""
             if needs_web_search(user_input):
                 web_context = search_web(user_input)
