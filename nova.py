@@ -15,11 +15,11 @@ st.set_page_config(
 # ---------------------------------------------------------
 # API CLIENT INITIALIZATION
 # ---------------------------------------------------------
-# Replace with your API keys if needed
 GROQ_API_KEY = "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"
-TAVILY_API_KEY = "tvly-YOUR_TAVILY_API_KEY_HERE"  # Replace with your Tavily key
+TAVILY_API_KEY = "tvly-YOUR_TAVILY_API_KEY_HERE"  # Optional: Replace if using web search
 
 groq_client = Groq(api_key=GROQ_API_KEY)
+
 try:
     tavily_client = TavilyClient(api_key=TAVILY_API_KEY)
 except Exception:
@@ -56,9 +56,15 @@ if "messages" not in st.session_state:
 with st.sidebar:
     st.title("⚙️ NOVA Settings")
     
+    # Active, stable Groq production models
     model_option = st.selectbox(
         "Select Model:",
-        ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
+        [
+            "llama-3.1-70b-versatile",
+            "llama-3.1-8b-instant",
+            "mixtral-8x7b-32768",
+            "gemma2-9b-it"
+        ]
     )
     
     system_tone = st.selectbox(
@@ -77,7 +83,7 @@ with st.sidebar:
 # MAIN CHAT INTERFACE
 # ---------------------------------------------------------
 st.title("🤖 NOVA AI Generator")
-st.caption("Fast AI Assistant powered by Groq & LLaMA 3.3")
+st.caption(f"Fast AI Assistant powered by Groq ({model_option})")
 
 # Display previous messages
 for msg in st.session_state.messages:
@@ -123,4 +129,4 @@ if user_input:
             st.write(bot_reply)
             st.session_state.messages.append({"role": "assistant", "content": bot_reply})
 
-
+ 
