@@ -14,18 +14,17 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------
-# SIDEBAR CONTROLS & SECURE KEY INPUT
+# SIDEBAR CONTROLS & API KEYS
 # ---------------------------------------------------------
 with st.sidebar:
     st.title("⚙️ NOVA Settings")
     
-    # Enter key directly in the browser so GitHub scanners cannot revoke it
     groq_api_key = st.text_input(
         "Groq API Key:",
         value=st.secrets.get("GROQ_API_KEY", os.environ.get("GROQ_API_KEY", "")),
         type="password",
         placeholder="gsk_...",
-        help="Paste your Groq API key here. It remains safe in your browser session."
+        help="Reads automatically from Streamlit Secrets if configured."
     )
     
     tavily_api_key = st.text_input(
@@ -34,7 +33,6 @@ with st.sidebar:
         type="password"
     )
 
-    # Active production chat models on Groq
     model_option = st.selectbox(
         "Select Model:",
         options=[
@@ -74,19 +72,38 @@ if tavily_api_key.strip():
         tavily_client = None
 
 # ---------------------------------------------------------
-# HELPER FUNCTIONS
+# ENHANCED WEB SEARCH ENGINE
 # ---------------------------------------------------------
 def search_web(query):
     if not tavily_client:
         return ""
     try:
-        results = tavily_client.search(query=query, search_depth="basic", max_results=3)
-        return "\n".join([f"- {r['content']} (Source: {r['url']})" for r in results.get("results", [])])
-    except Exception:
+        # Optimized query targeting completed scores and final results
+        search_query = query
+        if any(term in query.lower() for term in ["match", "who won", "score", "vs", "cup", "t20", "odi", "test"]):
+            search_query += " full scorecard final match result winner"
+
+        results = tavily_client.search(
+            query=search_query,
+            search_depth="advanced",
+            max_results=5
+        )
+        snippets = []
+        for r in results.get("results", []):
+            title = r.get("title", "")
+            content = r.get("content", "")
+            url = r.get("url", "")
+            snippets.append(f"Source: {title} ({url})\n{content}")
+        return "\n\n---\n\n".join(snippets)
+    except Exception as e:
         return ""
 
 def needs_web_search(prompt):
-    triggers = ["today", "latest", "current", "news", "price", "weather", "score", "match", "who won", "2025", "2026"]
+    triggers = [
+        "today", "latest", "current", "news", "price", "weather", 
+        "score", "match", "who won", "who is", "what is happening", 
+        "vs", "odi", "t20", "test", "final", "series", "2025", "2026"
+    ]
     return any(t in prompt.lower() for t in triggers)
 
 # ---------------------------------------------------------
@@ -111,7 +128,7 @@ user_input = st.chat_input("Ask NOVA anything...")
 
 if user_input:
     if not groq_client:
-        st.warning("⚠️ Please open the left sidebar (click '>>' at top-left) and enter your Groq API Key.")
+        st.warning("⚠️ Please open the sidebar and enter your Groq API Key.")
         st.stop()
 
     st.session_state.messages.append({"role": "user", "content": user_input})
@@ -119,23 +136,33 @@ if user_input:
         st.write(user_input)
 
     with st.chat_message("assistant"):
-        with st.spinner("Thinking & searching..."):
+        with st.spinner("Searching real-time data & generating match card..."):
             web_context = search_web(user_input) if needs_web_search(user_input) else ""
 
+            # Structured prompt instructing NOVA to output formatted tables & highlights
             system_prompt = (
-                f"You are NOVA, an intelligent AI companion. Tone: {system_tone}. "
-                f"Always respond clearly in English unless requested otherwise. Current date: {datetime.date.today()}."
+                f"You are NOVA, an advanced AI collaborator. Tone: {system_tone}.\n"
+                f"Current Date: {datetime.date.today()}.\n"
+                "IMPORTANT RESPONSE FORMATTING RULES:\n"
+                "1. If answering a sports, match, or cricket query:\n"
+                "   - Start with a bold heading: Match Title & Date.\n"
+                "   - State the core verdict/winner in the first sentence.\n"
+                "   - Provide Match Details: Venue, Toss, and Series Standing.\n"
+                "   - Present a clean Markdown Table showing Team, Innings/Overs, and Top Performers.\n"
+                "   - List bullet points for Player of the Match, top run scorers, top bowlers, and records/milestones.\n"
+                "2. When web search data is provided below, synthesize all facts from it to give a definitive, detailed answer.\n"
             )
-            if web_context:
-                system_prompt += f"\nLive Search Context:\n{web_context}"
 
-            payload = [{"role": "system", "content": system_prompt}]
+            if web_context:
+                system_prompt += f"\nLIVE WEB SEARCH RESULTS:\n{web_context}\n"
+
+            messages_payload = [{"role": "system", "content": system_prompt}]
             for m in st.session_state.messages:
-                payload.append({"role": m["role"], "content": m["content"]})
+                messages_payload.append({"role": m["role"], "content": m["content"]})
 
             try:
                 response = groq_client.chat.completions.create(
-                    messages=payload,
+                    messages=messages_payload,
                     model=model_option
                 )
                 bot_reply = response.choices[0].message.content
