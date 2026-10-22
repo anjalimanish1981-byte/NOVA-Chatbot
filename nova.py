@@ -14,18 +14,16 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------
-# SIDEBAR CONTROLS & SECURE CREDENTIAL FALLBACK
+# SIDEBAR CONTROLS & SECURE CREDENTIALS
 # ---------------------------------------------------------
 with st.sidebar:
     st.title("⚙️ NOVA Settings")
     
-    # Reads securely from Streamlit Secrets or sidebar entry
     groq_api_key = st.text_input(
         "Groq API Key:",
         value=st.secrets.get("GROQ_API_KEY", os.environ.get("GROQ_API_KEY", "")),
         type="password",
-        placeholder="gsk_...",
-        help="Reads automatically from Streamlit Secrets if configured."
+        placeholder="gsk_..."
     )
     
     tavily_api_key = st.text_input(
@@ -73,16 +71,25 @@ if tavily_api_key.strip():
         tavily_client = None
 
 # ---------------------------------------------------------
-# TARGETED WEB SEARCH ENGINE
+# CONTEXT-AWARE WEB SEARCH ENGINE
 # ---------------------------------------------------------
-def search_web(query):
+def search_web(current_query, chat_history):
     if not tavily_client:
         return ""
     try:
-        search_query = query
-        # Enhance sports queries to pull exact post-match scorecards
-        if any(term in query.lower() for term in ["match", "who won", "score", "vs", "cup", "t20", "odi", "test", "result"]):
-            search_query += " cricket full scorecard final result playing XI"
+        # If the user asks a brief follow-up, pull keywords from the previous message
+        search_terms = current_query
+        if len(current_query.split()) < 8 and len(chat_history) > 1:
+            for prev_msg in reversed(chat_history[:-1]):
+                if prev_msg["role"] == "user":
+                    search_terms = f"{prev_msg['content']} {current_query}"
+                    break
+
+        # Append sports qualifiers for complete post-match summaries
+        if any(term in search_terms.lower() for term in ["match", "who won", "score", "vs", "cup", "t20", "odi", "test", "result"]):
+            search_query = f"{search_terms} cricket scorecard result winner"
+        else:
+            search_query = search_terms
 
         results = tavily_client.search(
             query=search_query,
@@ -138,18 +145,16 @@ if user_input:
 
     with st.chat_message("assistant"):
         with st.spinner("Analyzing facts & searching real-time context..."):
-            web_context = search_web(user_input) if needs_web_search(user_input) else ""
+            # Passes conversation history so follow-up queries retain context
+            web_context = search_web(user_input, st.session_state.messages) if needs_web_search(user_input) else ""
 
-            # Strict anti-hallucination system prompt
             system_prompt = (
                 f"You are NOVA, a reliable, grounded, and helpful AI assistant. Tone: {system_tone}.\n"
                 f"Current Date: {datetime.date.today()}.\n\n"
-                "STRICT FACTUAL ACCURACY RULES:\n"
-                "1. Base all facts, scores, dates, and sports events EXCLUSIVELY on the provided LIVE WEB SEARCH RESULTS.\n"
-                "2. NEVER swap players between opposing teams (e.g., ensure players are listed strictly under their actual nation).\n"
-                "3. If the search results do not provide the final score or result, clearly state: "
-                "'The match details or final result could not be fully verified from live sources.' Do not invent numbers, overs, or wickets.\n"
-                "4. When a verified match summary is available, format cleanly using:\n"
+                "FACTUAL GROUNDING RULES:\n"
+                "1. Base all facts, scores, dates, and sports events EXCLUSIVELY on the LIVE WEB SEARCH RESULTS.\n"
+                "2. Keep opposing team rosters strictly separated; never attribute players to the wrong team.\n"
+                "3. When a verified match summary is available, format cleanly with:\n"
                 "   - Match title, date, venue, and toss.\n"
                 "   - A Markdown table showing Team, Score / Overs, and top performers.\n"
                 "   - Player of the Match and key highlights.\n"
