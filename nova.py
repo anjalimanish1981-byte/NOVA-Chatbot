@@ -14,11 +14,12 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------
-# SIDEBAR CONTROLS & API KEYS
+# SIDEBAR CONTROLS & SECURE CREDENTIAL FALLBACK
 # ---------------------------------------------------------
 with st.sidebar:
     st.title("⚙️ NOVA Settings")
     
+    # Reads securely from Streamlit Secrets or sidebar entry
     groq_api_key = st.text_input(
         "Groq API Key:",
         value=st.secrets.get("GROQ_API_KEY", os.environ.get("GROQ_API_KEY", "")),
@@ -72,16 +73,16 @@ if tavily_api_key.strip():
         tavily_client = None
 
 # ---------------------------------------------------------
-# ENHANCED WEB SEARCH ENGINE
+# TARGETED WEB SEARCH ENGINE
 # ---------------------------------------------------------
 def search_web(query):
     if not tavily_client:
         return ""
     try:
-        # Optimized query targeting completed scores and final results
         search_query = query
-        if any(term in query.lower() for term in ["match", "who won", "score", "vs", "cup", "t20", "odi", "test"]):
-            search_query += " full scorecard final match result winner"
+        # Enhance sports queries to pull exact post-match scorecards
+        if any(term in query.lower() for term in ["match", "who won", "score", "vs", "cup", "t20", "odi", "test", "result"]):
+            search_query += " cricket full scorecard final result playing XI"
 
         results = tavily_client.search(
             query=search_query,
@@ -95,7 +96,7 @@ def search_web(query):
             url = r.get("url", "")
             snippets.append(f"Source: {title} ({url})\n{content}")
         return "\n\n---\n\n".join(snippets)
-    except Exception as e:
+    except Exception:
         return ""
 
 def needs_web_search(prompt):
@@ -128,7 +129,7 @@ user_input = st.chat_input("Ask NOVA anything...")
 
 if user_input:
     if not groq_client:
-        st.warning("⚠️ Please open the sidebar and enter your Groq API Key.")
+        st.warning("⚠️ Please enter your Groq API Key in the left sidebar to start chatting.")
         st.stop()
 
     st.session_state.messages.append({"role": "user", "content": user_input})
@@ -136,21 +137,22 @@ if user_input:
         st.write(user_input)
 
     with st.chat_message("assistant"):
-        with st.spinner("Searching real-time data & generating match card..."):
+        with st.spinner("Analyzing facts & searching real-time context..."):
             web_context = search_web(user_input) if needs_web_search(user_input) else ""
 
-            # Structured prompt instructing NOVA to output formatted tables & highlights
+            # Strict anti-hallucination system prompt
             system_prompt = (
-                f"You are NOVA, an advanced AI collaborator. Tone: {system_tone}.\n"
-                f"Current Date: {datetime.date.today()}.\n"
-                "IMPORTANT RESPONSE FORMATTING RULES:\n"
-                "1. If answering a sports, match, or cricket query:\n"
-                "   - Start with a bold heading: Match Title & Date.\n"
-                "   - State the core verdict/winner in the first sentence.\n"
-                "   - Provide Match Details: Venue, Toss, and Series Standing.\n"
-                "   - Present a clean Markdown Table showing Team, Innings/Overs, and Top Performers.\n"
-                "   - List bullet points for Player of the Match, top run scorers, top bowlers, and records/milestones.\n"
-                "2. When web search data is provided below, synthesize all facts from it to give a definitive, detailed answer.\n"
+                f"You are NOVA, a reliable, grounded, and helpful AI assistant. Tone: {system_tone}.\n"
+                f"Current Date: {datetime.date.today()}.\n\n"
+                "STRICT FACTUAL ACCURACY RULES:\n"
+                "1. Base all facts, scores, dates, and sports events EXCLUSIVELY on the provided LIVE WEB SEARCH RESULTS.\n"
+                "2. NEVER swap players between opposing teams (e.g., ensure players are listed strictly under their actual nation).\n"
+                "3. If the search results do not provide the final score or result, clearly state: "
+                "'The match details or final result could not be fully verified from live sources.' Do not invent numbers, overs, or wickets.\n"
+                "4. When a verified match summary is available, format cleanly using:\n"
+                "   - Match title, date, venue, and toss.\n"
+                "   - A Markdown table showing Team, Score / Overs, and top performers.\n"
+                "   - Player of the Match and key highlights.\n"
             )
 
             if web_context:
